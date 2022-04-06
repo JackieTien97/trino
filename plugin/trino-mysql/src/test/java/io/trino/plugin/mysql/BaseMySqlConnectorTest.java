@@ -64,6 +64,7 @@ public abstract class BaseMySqlConnectorTest
                 return false;
 
             case SUPPORTS_COMMENT_ON_COLUMN:
+            case SUPPORTS_ADD_COLUMN_WITH_COMMENT:
                 return false;
 
             case SUPPORTS_ARRAY:
@@ -391,5 +392,14 @@ public abstract class BaseMySqlConnectorTest
     protected SqlExecutor onRemoteDatabase()
     {
         return mySqlServer::execute;
+    }
+
+    @Override
+    protected Session joinPushdownEnabled(Session session)
+    {
+        return Session.builder(super.joinPushdownEnabled(session))
+                // strategy is AUTOMATIC by default and would not work for certain test cases (even if statistics are collected)
+                .setCatalogSessionProperty(session.getCatalog().orElseThrow(), "join_pushdown_strategy", "EAGER")
+                .build();
     }
 }

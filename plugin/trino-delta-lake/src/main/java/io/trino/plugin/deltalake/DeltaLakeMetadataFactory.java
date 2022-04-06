@@ -40,11 +40,13 @@ public class DeltaLakeMetadataFactory
     private final HdfsEnvironment hdfsEnvironment;
     private final TransactionLogAccess transactionLogAccess;
     private final TypeManager typeManager;
+    private final DeltaLakeAccessControlMetadataFactory accessControlMetadataFactory;
     private final JsonCodec<DataFileInfo> dataFileInfoCodec;
-    private final JsonCodec<DeltaLakeUpdateResult> deleteResultJsonCodec;
+    private final JsonCodec<DeltaLakeUpdateResult> updateResultJsonCodec;
     private final TransactionLogWriterFactory transactionLogWriterFactory;
     private final NodeManager nodeManager;
     private final CheckpointWriterManager checkpointWriterManager;
+    private final DeltaLakeRedirectionsProvider deltaLakeRedirectionsProvider;
     private final CachingExtendedStatisticsAccess statisticsAccess;
     private final int domainCompactionThreshold;
     private final boolean hideNonDeltaLakeTables;
@@ -60,13 +62,15 @@ public class DeltaLakeMetadataFactory
             HdfsEnvironment hdfsEnvironment,
             TransactionLogAccess transactionLogAccess,
             TypeManager typeManager,
+            DeltaLakeAccessControlMetadataFactory accessControlMetadataFactory,
             DeltaLakeConfig deltaLakeConfig,
             @HideNonDeltaLakeTables boolean hideNonDeltaLakeTables,
             JsonCodec<DataFileInfo> dataFileInfoCodec,
-            JsonCodec<DeltaLakeUpdateResult> deleteResultJsonCodec,
+            JsonCodec<DeltaLakeUpdateResult> updateResultJsonCodec,
             TransactionLogWriterFactory transactionLogWriterFactory,
             NodeManager nodeManager,
             CheckpointWriterManager checkpointWriterManager,
+            DeltaLakeRedirectionsProvider deltaLakeRedirectionsProvider,
             CachingExtendedStatisticsAccess statisticsAccess,
             HiveConfig hiveConfig)
     {
@@ -74,11 +78,13 @@ public class DeltaLakeMetadataFactory
         this.hdfsEnvironment = requireNonNull(hdfsEnvironment, "hdfsEnvironment is null");
         this.transactionLogAccess = requireNonNull(transactionLogAccess, "transactionLogAccess is null");
         this.typeManager = requireNonNull(typeManager, "typeManager is null");
+        this.accessControlMetadataFactory = requireNonNull(accessControlMetadataFactory, "accessControlMetadataFactory is null");
         this.dataFileInfoCodec = requireNonNull(dataFileInfoCodec, "dataFileInfoCodec is null");
-        this.deleteResultJsonCodec = requireNonNull(deleteResultJsonCodec, "deleteResultJsonCodec is null");
+        this.updateResultJsonCodec = requireNonNull(updateResultJsonCodec, "updateResultJsonCodec is null");
         this.transactionLogWriterFactory = requireNonNull(transactionLogWriterFactory, "transactionLogWriterFactory is null");
         this.nodeManager = requireNonNull(nodeManager, "nodeManager is null");
         this.checkpointWriterManager = requireNonNull(checkpointWriterManager, "checkpointWriterManager is null");
+        this.deltaLakeRedirectionsProvider = requireNonNull(deltaLakeRedirectionsProvider, "deltaLakeRedirectionsProvider is null");
         this.statisticsAccess = requireNonNull(statisticsAccess, "statisticsAccess is null");
         requireNonNull(deltaLakeConfig, "deltaLakeConfig is null");
         this.domainCompactionThreshold = deltaLakeConfig.getDomainCompactionThreshold();
@@ -105,17 +111,19 @@ public class DeltaLakeMetadataFactory
                 deltaLakeMetastore,
                 hdfsEnvironment,
                 typeManager,
+                accessControlMetadataFactory.create(cachingHiveMetastore),
                 domainCompactionThreshold,
                 hideNonDeltaLakeTables,
                 unsafeWritesEnabled,
                 dataFileInfoCodec,
-                deleteResultJsonCodec,
+                updateResultJsonCodec,
                 transactionLogWriterFactory,
                 nodeManager,
                 checkpointWriterManager,
                 checkpointWritingInterval,
                 ignoreCheckpointWriteFailures,
                 deleteSchemaLocationsFallback,
+                deltaLakeRedirectionsProvider,
                 statisticsAccess);
     }
 }

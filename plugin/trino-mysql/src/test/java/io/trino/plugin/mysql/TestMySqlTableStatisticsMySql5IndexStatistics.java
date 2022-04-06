@@ -11,18 +11,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.trino.plugin.hive;
+package io.trino.plugin.mysql;
 
-import io.trino.plugin.hive.metastore.Table;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.LocatedFileStatus;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.RemoteIterator;
-
-import java.io.IOException;
-
-public interface DirectoryLister
+public class TestMySqlTableStatisticsMySql5IndexStatistics
+        extends BaseMySqlTableStatisticsIndexStatisticsTest
 {
-    RemoteIterator<LocatedFileStatus> list(FileSystem fs, Table table, Path path)
-            throws IOException;
+    public TestMySqlTableStatisticsMySql5IndexStatistics()
+    {
+        super("mysql:5.5.46"); // oldest available on RDS
+    }
 }

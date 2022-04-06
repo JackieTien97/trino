@@ -1165,13 +1165,13 @@ public class AccessControlManager
         CatalogAccessControlEntry entry = getConnectorAccessControl(context.getTransactionId(), tableName.getCatalogName());
 
         if (entry != null) {
-            entry.getAccessControl().getRowFilter(entry.toConnectorSecurityContext(context), tableName.asSchemaTableName())
-                    .ifPresent(filters::add);
+            entry.getAccessControl().getRowFilters(entry.toConnectorSecurityContext(context), tableName.asSchemaTableName())
+                    .forEach(filters::add);
         }
 
         for (SystemAccessControl systemAccessControl : getSystemAccessControls()) {
-            systemAccessControl.getRowFilter(context.toSystemSecurityContext(), tableName.asCatalogSchemaTableName())
-                    .ifPresent(filters::add);
+            systemAccessControl.getRowFilters(context.toSystemSecurityContext(), tableName.asCatalogSchemaTableName())
+                    .forEach(filters::add);
         }
 
         return filters.build();
@@ -1188,13 +1188,13 @@ public class AccessControlManager
         // connector-provided masks take precedence over global masks
         CatalogAccessControlEntry entry = getConnectorAccessControl(context.getTransactionId(), tableName.getCatalogName());
         if (entry != null) {
-            entry.getAccessControl().getColumnMask(entry.toConnectorSecurityContext(context), tableName.asSchemaTableName(), columnName, type)
-                    .ifPresent(masks::add);
+            entry.getAccessControl().getColumnMasks(entry.toConnectorSecurityContext(context), tableName.asSchemaTableName(), columnName, type)
+                    .forEach(masks::add);
         }
 
         for (SystemAccessControl systemAccessControl : getSystemAccessControls()) {
-            systemAccessControl.getColumnMask(context.toSystemSecurityContext(), tableName.asCatalogSchemaTableName(), columnName, type)
-                    .ifPresent(masks::add);
+            systemAccessControl.getColumnMasks(context.toSystemSecurityContext(), tableName.asCatalogSchemaTableName(), columnName, type)
+                    .forEach(masks::add);
         }
 
         return masks.build();

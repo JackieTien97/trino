@@ -22,7 +22,7 @@ Trino coordinator node configuration
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Access to the Trino coordinator should be through HTTPS, configured as described
-on :doc:`HTTPS and TLS </security/tls>`.
+on :doc:`TLS and HTTPS </security/tls>`.
 
 You also need to make changes to the Trino configuration files.
 LDAP authentication is configured on the coordinator in two parts.
@@ -93,9 +93,10 @@ Property                           Description
                                    ``ldap.allow-insecure=true``.
 ``ldap.allow-insecure``            Allow using an LDAP connection that is not secured with
                                    TLS.
-``ldap.ssl-trust-certificate``     The path to the PEM encoded trust certificate for the
-                                   LDAP server. This file should contain the LDAP
-                                   server's certificate or its certificate authority.
+``ldap.ssl.keystore.path``         Path to the PEM or JKS key store.
+``ldap.ssl.keystore.password``     Password for the key store.
+``ldap.ssl.truststore.path``       Path to the PEM or JKS trust store.
+``ldap.ssl.truststore.password``   Password for the trust store.
 ``ldap.user-bind-pattern``         This property can be used to specify the LDAP user
                                    bind string for password authentication. This property
                                    must contain the pattern ``${USER}``, which is
@@ -247,7 +248,7 @@ TLS configuration
 ~~~~~~~~~~~~~~~~~
 
 When using LDAP authentication, access to the Trino coordinator must be through
-:doc:`HTTPS/TLS </security/tls>`.
+:doc:`TLS/HTTPS </security/tls>`.
 
 Trino CLI execution
 ^^^^^^^^^^^^^^^^^^^^

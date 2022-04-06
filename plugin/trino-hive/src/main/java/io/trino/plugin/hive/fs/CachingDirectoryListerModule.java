@@ -11,8 +11,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.trino.plugin.hive;
+package io.trino.plugin.hive.fs;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.inject.Binder;
 import com.google.inject.Module;
 import com.google.inject.Scopes;
@@ -24,25 +25,22 @@ import static java.util.Objects.requireNonNull;
 public class CachingDirectoryListerModule
         implements Module
 {
-    private final Optional<CachingDirectoryLister> cachingDirectoryLister;
+    private final Optional<DirectoryLister> directoryLister;
 
-    public CachingDirectoryListerModule(Optional<CachingDirectoryLister> cachingDirectoryLister)
+    @VisibleForTesting
+    public CachingDirectoryListerModule(Optional<DirectoryLister> directoryLister)
     {
-        this.cachingDirectoryLister = requireNonNull(cachingDirectoryLister, "cachingDirectoryLister is null");
+        this.directoryLister = requireNonNull(directoryLister, "directoryLister is null");
     }
 
     @Override
     public void configure(Binder binder)
     {
-        if (cachingDirectoryLister.isPresent()) {
-            CachingDirectoryLister directoryLister = cachingDirectoryLister.get();
-            binder.bind(DirectoryLister.class).toInstance(directoryLister);
-            binder.bind(TableInvalidationCallback.class).toInstance(directoryLister);
+        if (directoryLister.isPresent()) {
+            binder.bind(DirectoryLister.class).toInstance(directoryLister.get());
         }
         else {
-            binder.bind(CachingDirectoryLister.class).in(Scopes.SINGLETON);
-            binder.bind(DirectoryLister.class).to(CachingDirectoryLister.class);
-            binder.bind(TableInvalidationCallback.class).to(CachingDirectoryLister.class);
+            binder.bind(DirectoryLister.class).to(CachingDirectoryLister.class).in(Scopes.SINGLETON);
         }
     }
 }

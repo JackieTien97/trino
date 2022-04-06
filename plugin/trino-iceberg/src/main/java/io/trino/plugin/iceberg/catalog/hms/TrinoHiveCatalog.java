@@ -20,12 +20,9 @@ import io.airlift.log.Logger;
 import io.trino.plugin.base.CatalogName;
 import io.trino.plugin.hive.HdfsEnvironment;
 import io.trino.plugin.hive.HdfsEnvironment.HdfsContext;
-import io.trino.plugin.hive.HiveMetadata;
 import io.trino.plugin.hive.HiveSchemaProperties;
-import io.trino.plugin.hive.HiveViewNotSupportedException;
 import io.trino.plugin.hive.TableAlreadyExistsException;
 import io.trino.plugin.hive.ViewAlreadyExistsException;
-import io.trino.plugin.hive.ViewReaderUtil;
 import io.trino.plugin.hive.metastore.Column;
 import io.trino.plugin.hive.metastore.Database;
 import io.trino.plugin.hive.metastore.HiveMetastore;
@@ -68,7 +65,6 @@ import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -105,12 +101,9 @@ import static io.trino.spi.StandardErrorCode.ALREADY_EXISTS;
 import static io.trino.spi.StandardErrorCode.INVALID_SCHEMA_PROPERTY;
 import static io.trino.spi.StandardErrorCode.NOT_SUPPORTED;
 import static io.trino.spi.StandardErrorCode.SCHEMA_NOT_EMPTY;
-import static io.trino.spi.StandardErrorCode.TABLE_NOT_FOUND;
 import static java.util.Objects.requireNonNull;
 import static java.util.UUID.randomUUID;
 import static org.apache.hadoop.hive.metastore.TableType.VIRTUAL_VIEW;
-import static org.apache.iceberg.BaseMetastoreTableOperations.ICEBERG_TABLE_TYPE_VALUE;
-import static org.apache.iceberg.BaseMetastoreTableOperations.TABLE_TYPE_PROP;
 import static org.apache.iceberg.CatalogUtil.dropTableData;
 import static org.apache.iceberg.TableProperties.DEFAULT_FILE_FORMAT_DEFAULT;
 
@@ -121,24 +114,14 @@ public class TrinoHiveCatalog
     private static final String ICEBERG_MATERIALIZED_VIEW_COMMENT = "Presto Materialized View";
     public static final String DEPENDS_ON_TABLES = "dependsOnTables";
 
-    // Be compatible with views defined by the Hive connector, which can be useful under certain conditions.
-    private static final String TRINO_CREATED_BY = HiveMetadata.TRINO_CREATED_BY;
-    private static final String TRINO_CREATED_BY_VALUE = "Trino Iceberg connector";
-    private static final String PRESTO_VIEW_COMMENT = HiveMetadata.PRESTO_VIEW_COMMENT;
-    private static final String PRESTO_VERSION_NAME = HiveMetadata.PRESTO_VERSION_NAME;
-    private static final String PRESTO_QUERY_ID_NAME = HiveMetadata.PRESTO_QUERY_ID_NAME;
-    private static final String PRESTO_VIEW_EXPANDED_TEXT_MARKER = HiveMetadata.PRESTO_VIEW_EXPANDED_TEXT_MARKER;
-
     private final CatalogName catalogName;
     private final CachingHiveMetastore metastore;
     private final HdfsEnvironment hdfsEnvironment;
     private final TypeManager typeManager;
-    private final String trinoVersion;
     private final boolean isUsingSystemSecurity;
     private final boolean deleteSchemaLocationsFallback;
 
     private final Map<SchemaTableName, TableMetadata> tableMetadataCache = new ConcurrentHashMap<>();
-    private final ViewReaderUtil.PrestoViewReader viewReader = new ViewReaderUtil.PrestoViewReader();
 
     public TrinoHiveCatalog(
             CatalogName catalogName,
@@ -151,12 +134,11 @@ public class TrinoHiveCatalog
             boolean isUsingSystemSecurity,
             boolean deleteSchemaLocationsFallback)
     {
-        super(tableOperationsProvider, useUniqueTableLocation);
+        super(tableOperationsProvider, trinoVersion, useUniqueTableLocation);
         this.catalogName = requireNonNull(catalogName, "catalogName is null");
         this.metastore = requireNonNull(metastore, "metastore is null");
         this.hdfsEnvironment = requireNonNull(hdfsEnvironment, "hdfsEnvironment is null");
         this.typeManager = requireNonNull(typeManager, "typeManager is null");
-        this.trinoVersion = requireNonNull(trinoVersion, "trinoVersion is null");
         this.isUsingSystemSecurity = isUsingSystemSecurity;
         this.deleteSchemaLocationsFallback = deleteSchemaLocationsFallback;
     }
@@ -223,9 +205,7 @@ public class TrinoHiveCatalog
     public void dropNamespace(ConnectorSession session, String namespace)
     {
         // basic sanity check to provide a better error message
-        if (!listTables(session, Optional.of(namespace)).isEmpty() ||
-                !listViews(session, Optional.of(namespace)).isEmpty() ||
-                !listMaterializedViews(session, Optional.of(namespace)).isEmpty()) {
+        if (!listTables(session, Optional.of(namespace)).isEmpty()) {
             throw new TrinoException(SCHEMA_NOT_EMPTY, "Schema not empty: " + namespace);
         }
 
@@ -286,22 +266,9 @@ public class TrinoHiveCatalog
     public List<SchemaTableName> listTables(ConnectorSession session, Optional<String> namespace)
     {
         ImmutableSet.Builder<SchemaTableName> tablesListBuilder = ImmutableSet.builder();
-        listNamespaces(session, namespace)
-                .stream()
-                .flatMap(schema -> Stream.concat(
-                                // Get tables with parameter table_type set to  "ICEBERG" or "iceberg". This is required because
-                                // Trino uses lowercase value whereas Spark and Flink use uppercase.
-                                // TODO: use one metastore call to pass both the filters: https://github.com/trinodb/trino/issues/7710
-                                metastore.getTablesWithParameter(schema, TABLE_TYPE_PROP, ICEBERG_TABLE_TYPE_VALUE.toLowerCase(Locale.ENGLISH)).stream()
-                                        .map(table -> new SchemaTableName(schema, table)),
-                                metastore.getTablesWithParameter(schema, TABLE_TYPE_PROP, ICEBERG_TABLE_TYPE_VALUE.toUpperCase(Locale.ENGLISH)).stream()
-                                        .map(table -> new SchemaTableName(schema, table)))
-                        .distinct())  // distinct() to avoid duplicates for case-insensitive HMS backends
-                .forEach(tablesListBuilder::add);
-
-        tablesListBuilder.addAll(listViews(session, namespace));
-        tablesListBuilder.addAll(listMaterializedViews(session, namespace));
-        // Deduplicate with set because state may change concurrently
+        for (String schemaName : listNamespaces(session, namespace)) {
+            metastore.getAllTables(schemaName).forEach(tableName -> tablesListBuilder.add(new SchemaTableName(schemaName, tableName)));
+        }
         return tablesListBuilder.build().asList();
     }
 
@@ -377,14 +344,6 @@ public class TrinoHiveCatalog
             definition = definition.withoutOwner();
         }
 
-        Map<String, String> properties = ImmutableMap.<String, String>builder()
-                .put(PRESTO_VIEW_FLAG, "true")
-                .put(TRINO_CREATED_BY, TRINO_CREATED_BY_VALUE)
-                .put(PRESTO_VERSION_NAME, trinoVersion)
-                .put(PRESTO_QUERY_ID_NAME, session.getQueryId())
-                .put(TABLE_COMMENT, PRESTO_VIEW_COMMENT)
-                .buildOrThrow();
-
         io.trino.plugin.hive.metastore.Table.Builder tableBuilder = io.trino.plugin.hive.metastore.Table.builder()
                 .setDatabaseName(schemaViewName.getSchemaName())
                 .setTableName(schemaViewName.getTableName())
@@ -392,7 +351,7 @@ public class TrinoHiveCatalog
                 .setTableType(org.apache.hadoop.hive.metastore.TableType.VIRTUAL_VIEW.name())
                 .setDataColumns(ImmutableList.of(new Column("dummy", HIVE_STRING, Optional.empty())))
                 .setPartitionColumns(ImmutableList.of())
-                .setParameters(properties)
+                .setParameters(createViewProperties(session))
                 .setViewOriginalText(Optional.of(encodeViewData(definition)))
                 .setViewExpandedText(Optional.of(PRESTO_VIEW_EXPANDED_TEXT_MARKER));
 
@@ -465,54 +424,18 @@ public class TrinoHiveCatalog
     }
 
     @Override
-    public Map<SchemaTableName, ConnectorViewDefinition> getViews(ConnectorSession session, Optional<String> namespace)
+    public Optional<ConnectorViewDefinition> getView(ConnectorSession session, SchemaTableName viewName)
     {
-        ImmutableMap.Builder<SchemaTableName, ConnectorViewDefinition> views = ImmutableMap.builder();
-        for (SchemaTableName name : listViews(session, namespace)) {
-            try {
-                getView(session, name).ifPresent(view -> views.put(name, view));
-            }
-            catch (TrinoException e) {
-                if (e.getErrorCode().equals(TABLE_NOT_FOUND.toErrorCode())) {
-                    // Ignore view that was dropped during query execution (race condition)
-                }
-                else {
-                    throw e;
-                }
-            }
-        }
-        return views.buildOrThrow();
-    }
-
-    @Override
-    public Optional<ConnectorViewDefinition> getView(ConnectorSession session, SchemaTableName viewIdentifier)
-    {
-        if (isHiveSystemSchema(viewIdentifier.getSchemaName())) {
+        if (isHiveSystemSchema(viewName.getSchemaName())) {
             return Optional.empty();
         }
-        return metastore.getTable(viewIdentifier.getSchemaName(), viewIdentifier.getTableName())
-                .filter(table -> HiveMetadata.PRESTO_VIEW_COMMENT.equals(table.getParameters().get(TABLE_COMMENT))) // filter out materialized views
-                .filter(ViewReaderUtil::canDecodeView)
-                .map(view -> {
-                    if (!isPrestoView(view)) {
-                        throw new HiveViewNotSupportedException(viewIdentifier);
-                    }
-
-                    ConnectorViewDefinition definition = viewReader
-                            .decodeViewData(view.getViewOriginalText().get(), view, catalogName);
-                    // use owner from table metadata if it exists
-                    if (view.getOwner().isPresent() && !definition.isRunAsInvoker()) {
-                        definition = new ConnectorViewDefinition(
-                                definition.getOriginalSql(),
-                                definition.getCatalog(),
-                                definition.getSchema(),
-                                definition.getColumns(),
-                                definition.getComment(),
-                                view.getOwner(),
-                                false);
-                    }
-                    return definition;
-                });
+        return metastore.getTable(viewName.getSchemaName(), viewName.getTableName())
+                .flatMap(view -> getView(
+                        viewName,
+                        view.getViewOriginalText(),
+                        view.getTableType(),
+                        view.getParameters(),
+                        view.getOwner()));
     }
 
     @Override

@@ -81,11 +81,6 @@
 
         <dependency>
             <groupId>io.airlift</groupId>
-            <artifactId>stats</artifactId>
-        </dependency>
-
-        <dependency>
-            <groupId>io.airlift</groupId>
             <artifactId>units</artifactId>
         </dependency>
 
@@ -97,11 +92,6 @@
         <dependency>
             <groupId>com.amazonaws</groupId>
             <artifactId>aws-java-sdk-glue</artifactId>
-        </dependency>
-
-        <dependency>
-            <groupId>com.amazonaws</groupId>
-            <artifactId>aws-java-sdk-s3</artifactId>
         </dependency>
 
         <dependency>
@@ -199,6 +189,18 @@
             <scope>runtime</scope>
         </dependency>
 
+        <dependency>
+            <groupId>io.airlift</groupId>
+            <artifactId>stats</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>com.amazonaws</groupId>
+            <artifactId>aws-java-sdk-s3</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
         <!-- Trino SPI -->
         <dependency>
             <groupId>io.trino</groupId>
@@ -228,13 +230,13 @@
         <dependency>
             <groupId>io.trino</groupId>
             <artifactId>trino-exchange</artifactId>
-            <type>test-jar</type>
             <scope>test</scope>
         </dependency>
 
         <dependency>
             <groupId>io.trino</groupId>
             <artifactId>trino-exchange</artifactId>
+            <type>test-jar</type>
             <scope>test</scope>
         </dependency>
 

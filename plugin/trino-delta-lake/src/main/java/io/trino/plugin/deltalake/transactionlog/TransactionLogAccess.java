@@ -98,27 +98,26 @@ public class TransactionLogAccess
     public TransactionLogAccess(
             TypeManager typeManager,
             CheckpointSchemaManager checkpointSchemaManager,
-            DeltaLakeConfig config,
+            DeltaLakeConfig deltaLakeConfig,
             FileFormatDataSourceStats fileFormatDataSourceStats,
             HdfsEnvironment hdfsEnvironment,
-            ParquetReaderConfig parquetReaderConfig,
-            DeltaLakeConfig deltalakeConfig)
+            ParquetReaderConfig parquetReaderConfig)
     {
         this.typeManager = requireNonNull(typeManager, "typeManager is null");
         this.checkpointSchemaManager = requireNonNull(checkpointSchemaManager, "checkpointSchemaManager is null");
         this.fileFormatDataSourceStats = requireNonNull(fileFormatDataSourceStats, "fileFormatDataSourceStats is null");
         this.hdfsEnvironment = requireNonNull(hdfsEnvironment, "hdfsEnvironment is null");
         this.parquetReaderOptions = requireNonNull(parquetReaderConfig, "parquetReaderConfig is null").toParquetReaderOptions();
-        requireNonNull(deltalakeConfig, "deltalakeConfig is null");
-        this.checkpointRowStatisticsWritingEnabled = deltalakeConfig.isCheckpointRowStatisticsWritingEnabled();
+        requireNonNull(deltaLakeConfig, "deltaLakeConfig is null");
+        this.checkpointRowStatisticsWritingEnabled = deltaLakeConfig.isCheckpointRowStatisticsWritingEnabled();
 
         tableSnapshots = EvictableCacheBuilder.newBuilder()
-                .expireAfterWrite(config.getMetadataCacheTtl().toMillis(), TimeUnit.MILLISECONDS)
+                .expireAfterWrite(deltaLakeConfig.getMetadataCacheTtl().toMillis(), TimeUnit.MILLISECONDS)
                 .recordStats()
                 .build();
         activeDataFileCache = EvictableCacheBuilder.newBuilder()
                 .weigher((Weigher<String, DeltaLakeDataFileCacheEntry>) (key, value) -> Ints.saturatedCast(estimatedSizeOf(key) + value.getRetainedSizeInBytes()))
-                .maximumWeight(config.getDataFileCacheSize().toBytes())
+                .maximumWeight(deltaLakeConfig.getDataFileCacheSize().toBytes())
                 .recordStats()
                 .build();
     }
